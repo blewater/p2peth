@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.21;
 
+import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -9,6 +10,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 /// @custom:oz-upgrades-from P2PEth
 contract P2PEthV2 is
     Initializable,
+    PausableUpgradeable,
     OwnableUpgradeable,
     ReentrancyGuardUpgradeable,
     UUPSUpgradeable
@@ -48,6 +50,7 @@ contract P2PEthV2 is
     }
 
     function initialize(address _companyAddress) public initializer {
+        __Pausable_init();
         __ReentrancyGuard_init();
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
@@ -173,7 +176,7 @@ contract P2PEthV2 is
     }
 
     // Internal function to calculate fee
-    function calculateFee(uint256 amount) private pure returns (uint256) {
+    function calculateFee(uint256 amount) internal pure returns (uint256) {
         uint256 feeRate;
         if (amount < 1 ether) {
             feeRate = MAX_FEE_PCNT; // 0.2%
@@ -200,4 +203,12 @@ contract P2PEthV2 is
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    function pause() public onlyOwner {
+        _pause();
+    }
+
+    function unpause() public onlyOwner {
+        _unpause();
+    }
 }
