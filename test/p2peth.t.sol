@@ -2,30 +2,53 @@
 pragma solidity ^0.8.21;
 
 import {Test, console2} from "forge-std/Test.sol";
+import "../src/p2peth_v2.sol";
 import "../src/p2peth.sol";
+import "../src/proxy.sol";
 
 contract P2PEthTest is Test {
-    P2PEth p2p;
+    address constant COMPANY_ADDRESS_V1 = address(0x111);
+    address constant COMPANY_ADDRESS_V2 = address(0x222);
+
+    P2PEth p2pV1;
+    UUPSProxy proxy;
+    P2PEth wrappedProxy;
+    P2PEthV2 wrappedProxyV2;
     address companyAddress;
 
     function setUp() public {
-        companyAddress = address(0x123); // Replace with your actual company address
-        p2p = new P2PEth();
-        p2p.initialize(companyAddress);
+        companyAddress = address(COMPANY_ADDRESS_V1);
+
+        // Deploy the implementation contract
+        p2pV1 = new P2PEth();
+
+        // Deploy the UUPS proxy, pointing it to the implementation contract
+        proxy = new UUPSProxy(address(p2pV1), "");
+
+        // Cast the proxy in an to the contract to support easier calls
+        wrappedProxy = P2PEth(address(proxy));
+
+        // Initialize the implementation contract
+        wrappedProxy.initialize(companyAddress);
+    }
+
+    function testInitializationBeforeUpgrade() public {
+        assertEq(wrappedProxy.getVersion(), 1);
+        assertEq(wrappedProxy.getCompanyAddress(), COMPANY_ADDRESS_V1);
     }
 
     function testSingleDepositUpdatesBalance() public {
-        uint256 userInitialBalance = p2p.getBalance(address(this));
+        uint256 userInitialBalance = wrappedProxy.getBalance(address(this));
         assertEq(userInitialBalance, 0);
-        assertEq(address(p2p).balance, 0);
+        assertEq(address(wrappedProxy).balance, 0);
 
         uint256 depositAmount = 1 ether;
 
-        p2p.deposit{value: depositAmount}();
-        uint256 userFinalBalance = p2p.getBalance(address(this));
+        wrappedProxy.deposit{value: depositAmount}();
+        uint256 userFinalBalance = wrappedProxy.getBalance(address(this));
         assertEq(userFinalBalance, userInitialBalance + depositAmount);
 
-        uint256 contractFinalBal = address(p2p).balance;
+        uint256 contractFinalBal = address(wrappedProxy).balance;
         assertEq(contractFinalBal, depositAmount);
         assertEq(contractFinalBal, userFinalBalance);
     }
@@ -36,52 +59,55 @@ contract P2PEthTest is Test {
         vm.deal(userA, 1 ether);
         address userB = makeAddr("B");
         vm.deal(userB, 0.5 ether);
-        uint256 userAInitialBalance = p2p.getBalance(userA);
-        uint256 userBInitialBalance = p2p.getBalance(userB);
+        uint256 userAInitialBalance = wrappedProxy.getBalance(userA);
+        uint256 userBInitialBalance = wrappedProxy.getBalance(userB);
         assertEq(userAInitialBalance, 0);
         assertEq(userBInitialBalance, 0);
-        assertEq(address(p2p).balance, 0);
+        assertEq(address(wrappedProxy).balance, 0);
 
         // UserA deposits
         vm.startPrank(userA); // Pretend to be userA
-        p2p.deposit{value: 1 ether}();
-        uint256 userAFinalBalance = p2p.getBalance(userA);
+        wrappedProxy.deposit{value: 1 ether}();
+        uint256 userAFinalBalance = wrappedProxy.getBalance(userA);
         assertEq(userAFinalBalance, userAInitialBalance + 1 ether);
 
         // Total contract balance should be the same as userA's balance
-        uint256 contractBal = address(p2p).balance;
+        uint256 contractBal = address(wrappedProxy).balance;
         assertEq(contractBal, 1 ether);
         assertEq(contractBal, userAFinalBalance);
 
         // UserB deposits
         vm.startPrank(userB); // Pretend to be userB
-        p2p.deposit{value: 0.5 ether}();
-        uint256 userBFinalBalance = p2p.getBalance(userB);
+        wrappedProxy.deposit{value: 0.5 ether}();
+        uint256 userBFinalBalance = wrappedProxy.getBalance(userB);
         assertEq(userBFinalBalance, userBInitialBalance + 0.5 ether);
 
         // Total contract balance should be the sum of the two deposits
-        contractBal = address(p2p).balance;
+        contractBal = address(wrappedProxy).balance;
         assertEq(contractBal, userAFinalBalance + userBFinalBalance);
     }
+
+    // receive Ether to test withdrawals
+    receive() external payable {}
 
     function testWithdrawUpdatesBalanceAndTransfersETH() public {
         uint256 depositAmount = 1 ether;
         uint256 withdrawAmount = 0.5 ether;
 
-        p2p.deposit{value: depositAmount}();
+        wrappedProxy.deposit{value: depositAmount}();
 
         // Check initial balances
-        uint256 initialContractBalance = address(p2p).balance;
+        uint256 initialContractBalance = address(wrappedProxy).balance;
         assertEq(initialContractBalance, depositAmount);
-        uint256 initialUserBalance = p2p.getBalance(address(this));
+        uint256 initialUserBalance = wrappedProxy.getBalance(address(this));
         assertEq(initialUserBalance, initialContractBalance);
 
         // Withdraw
-        p2p.withdraw(withdrawAmount);
+        wrappedProxy.withdraw(withdrawAmount);
 
         // Check final balances
-        uint256 finalContractBalance = address(p2p).balance;
-        uint256 finalUserBalance = p2p.getBalance(address(this));
+        uint256 finalContractBalance = address(wrappedProxy).balance;
+        uint256 finalUserBalance = wrappedProxy.getBalance(address(this));
         assertEq(finalContractBalance, initialContractBalance - withdrawAmount);
         assertEq(finalUserBalance, initialUserBalance - withdrawAmount);
     }
@@ -91,21 +117,21 @@ contract P2PEthTest is Test {
         uint256 depositAmount = 1 ether;
         uint256 sendAmount = 0.5 ether;
 
-        p2p.deposit{value: depositAmount}();
+        wrappedProxy.deposit{value: depositAmount}();
 
-        uint256 initialSenderBalance = p2p.getBalance(address(this));
+        uint256 initialSenderBalance = wrappedProxy.getBalance(address(this));
         assertEq(initialSenderBalance, depositAmount);
-        uint256 initialRecipientBalance = p2p.getBalance(recipient);
+        uint256 initialRecipientBalance = wrappedProxy.getBalance(recipient);
         assertEq(initialRecipientBalance, 0);
-        uint256 initialCompanyBalance = p2p.getBalance(companyAddress);
+        uint256 initialCompanyBalance = wrappedProxy.getBalance(companyAddress);
         assertEq(initialCompanyBalance, 0);
 
-        p2p.send(recipient, sendAmount);
+        wrappedProxy.send(recipient, sendAmount);
 
         uint256 fee = (sendAmount * 20) / 10000; // 0.1% fee rate in basis points
-        uint256 finalSenderBalance = p2p.getBalance(address(this));
-        uint256 finalRecipientBalance = p2p.getBalance(recipient);
-        uint256 finalCompanyBalance = p2p.getBalance(companyAddress);
+        uint256 finalSenderBalance = wrappedProxy.getBalance(address(this));
+        uint256 finalRecipientBalance = wrappedProxy.getBalance(recipient);
+        uint256 finalCompanyBalance = wrappedProxy.getBalance(companyAddress);
 
         assertEq(finalSenderBalance, initialSenderBalance - sendAmount);
         assertEq(
@@ -115,6 +141,67 @@ contract P2PEthTest is Test {
         assertEq(finalCompanyBalance, initialCompanyBalance + fee);
     }
 
-    // receive Ether to test withdrawals
-    receive() external payable {} 
+    // Function to perform and validate a deposit using v1 implementation
+    function performAndValidateDeposit(uint256 depositAmount) internal {
+        wrappedProxy.deposit{value: depositAmount}();
+        validateBalances(
+            wrappedProxy.getBalance(address(this)),
+            address(wrappedProxy).balance,
+            depositAmount,
+            depositAmount
+        );
+    }
+
+    // Function to validate user deposit and contract balances
+    function validateBalances(
+        uint256 userBalance,
+        uint256 contractBalance,
+        uint256 expectedUserBalance,
+        uint256 expectedContractBalance
+    ) internal {
+        assertEq(userBalance, expectedUserBalance);
+        assertEq(contractBalance, expectedContractBalance);
+        assertEq(contractBalance, userBalance);
+    }
+
+    function testUpgradeToV2() public {
+        // Deploy the new version of the contract
+        P2PEthV2 p2pV2 = new P2PEthV2();
+
+        // Perform and validate a deposit in v1
+        uint256 depositAmount = 0.888888888 ether;
+        performAndValidateDeposit(depositAmount);
+
+        try wrappedProxy.upgradeToAndCall(address(p2pV2), "") {
+            // Success: Validate the upgrade
+            // Create a new wrapped instance to v2 interface
+            wrappedProxyV2 = P2PEthV2(address(proxy));
+
+            // call new method only in V2
+            wrappedProxyV2.setCompanyAddress(COMPANY_ADDRESS_V2);
+
+            // Validate the upgrade using the V2 proxy
+            // and assert the balances remain identical
+            validateBalances(
+                wrappedProxyV2.getBalance(address(this)),
+                address(wrappedProxyV2).balance,
+                depositAmount,
+                depositAmount
+            );
+
+            assertEq(wrappedProxyV2.getVersion(), 2);
+            assertEq(wrappedProxyV2.getCompanyAddress(), COMPANY_ADDRESS_V2);
+        } catch (bytes memory reason) {
+            // Debug: Capture the failure reason
+            emit DebugFailure("Upgrade failed", reason);
+        }
+    }
+
+    // Debugging events
+    event DebugState(
+        string description,
+        address proxyAddress,
+        address newImplementation
+    );
+    event DebugFailure(string description, bytes reason);
 }
