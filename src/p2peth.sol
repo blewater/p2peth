@@ -100,6 +100,17 @@ contract P2PEth is
             balances[msg.sender] = newBalance;
         }
 
+        /** 
+        * Minimal gas savings in assembly version: max 36661 vs 37069 (Solidity)
+        * Left here only for reference
+        
+        bool success;
+        assembly {
+            let data := mload(0x40)  // Load the free memory pointer
+            mstore(data, 0x0)        // Store a 0 length of the bytes array
+            success := call(gas(), caller(), amount, add(data, 0x20), mload(data), 0, 0)
+        }
+        */
         (bool success, ) = payable(msg.sender).call{value: amount}("");
         if (!success) {
             revert TransferFailed(msg.sender, amount);
