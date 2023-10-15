@@ -1,3 +1,4 @@
+
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.21;
 
@@ -22,9 +23,10 @@ contract P2PEth is
 
     // State variables
     mapping(address => uint256) private balances;
-    address public companyAddress;
+    address private companyAddress;
 
     // constants
+    uint256 private constant Version = 1;
     uint256 private constant BASIS_POINTS = 10000; // For fee calculations
     uint256 private constant MAX_FEE_PCNT = 20; // 0.2%
     uint256 private constant MID_FEE_PCNT = 15; // 0.15%
@@ -40,11 +42,28 @@ contract P2PEth is
         uint256 fee
     );
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(address _companyAddress) public initializer {
+        __ReentrancyGuard_init();
+        __Ownable_init(msg.sender);
+        __UUPSUpgradeable_init();
+        
         if (_companyAddress == address(0)) {
             revert ZeroAddress(_companyAddress);
         }
         companyAddress = _companyAddress;
+    }
+
+    function getVersion() public pure returns (uint256) {
+        return Version;
+    }
+
+    function getCompanyAddress() external view onlyOwner() returns (address) {
+        return companyAddress;
     }
 
     // Deposit function. Because it's not interacting with external contracts, it's not marked as nonReentrant.
