@@ -105,6 +105,17 @@ contract P2PEthV2 is
             balances[msg.sender] = newBalance;
         }
 
+        /** 
+        * Minimal gas savings in assembly version: max 36661 vs 37069 (Solidity)
+        * Left here only for reference
+        
+        bool success;
+        assembly {
+            let data := mload(0x40)  // Load the free memory pointer
+            mstore(data, 0x0)        // Store a 0 length of the bytes array
+            success := call(gas(), caller(), amount, add(data, 0x20), mload(data), 0, 0)
+        }
+        */
         (bool success, ) = payable(msg.sender).call{value: amount}("");
         if (!success) {
             revert TransferFailed(msg.sender, amount);
@@ -115,8 +126,12 @@ contract P2PEthV2 is
 
     // Send function
     function send(address recipient, uint256 amount) external nonReentrant {
-        require(balances[msg.sender] >= amount, "Insufficient balance");
-        require(recipient != address(0), "Invalid recipient address");
+        if (balances[msg.sender] < amount) {
+            revert InsufficientBalance(balances[msg.sender], amount);
+        }
+        if (recipient == address(0)) {
+            revert ZeroAddress(recipient);
+        }
 
         uint256 fee = calculateFee(amount);
 
@@ -168,6 +183,7 @@ contract P2PEthV2 is
             feeRate = MIN_FEE_PCNT; // 0.1%
         }
 
+        // (amount * feeRate) / BASIS_POINTS
         unchecked {
             uint256 amountTimesFeeRate = amount * feeRate;
             if (amountTimesFeeRate < amount) {
