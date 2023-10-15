@@ -2,10 +2,16 @@
 pragma solidity ^0.8.21;
 
 import {Test, console2} from "forge-std/Test.sol";
-import "../src/p2peth_v2.sol";
-import "../src/p2peth.sol";
+import {P2PEthV2} from "../src/p2peth_v2.sol";
+import {P2PEth} from "../src/p2peth.sol";
 import "../src/proxy.sol";
 
+/**
+ * @title P2PEthTest
+ * @dev This contract is designed to test the functionality of the P2PEth and P2PEthV2 contracts.
+ * It includes tests for initialization, deposits, withdrawals, and P2P transactions.
+ * The contract also tests the upgradeability feature using a UUPS proxy.
+ */
 contract P2PEthTest is Test {
     address constant COMPANY_ADDRESS_V1 = address(0x111);
     address constant COMPANY_ADDRESS_V2 = address(0x222);
@@ -16,129 +22,217 @@ contract P2PEthTest is Test {
     P2PEthV2 wrappedProxyV2;
     address companyAddress;
 
+    /// @notice Set up the initial state for each test here
     function setUp() public {
         companyAddress = address(COMPANY_ADDRESS_V1);
-
-        // Deploy the implementation contract
         p2pV1 = new P2PEth();
-
-        // Deploy the UUPS proxy, pointing it to the implementation contract
         proxy = new UUPSProxy(address(p2pV1), "");
-
-        // Cast the proxy in an to the contract to support easier calls
         wrappedProxy = P2PEth(address(proxy));
-
-        // Initialize the implementation contract
         wrappedProxy.initialize(companyAddress);
     }
 
-    function testInitializationBeforeUpgrade() public {
-        assertEq(wrappedProxy.getVersion(), 1);
-        assertEq(wrappedProxy.getCompanyAddress(), COMPANY_ADDRESS_V1);
-    }
-
-    function testSingleDepositUpdatesBalance() public {
-        uint256 userInitialBalance = wrappedProxy.getBalance(address(this));
-        assertEq(userInitialBalance, 0);
-        assertEq(address(wrappedProxy).balance, 0);
-
-        uint256 depositAmount = 1 ether;
-
+    /// @notice Internal function to perform and validate a deposit
+    /// @param depositAmount The amount to deposit
+    /// @param expectedBalance The expected balance after the deposit
+    function performAndValidateDeposit(
+        uint256 depositAmount,
+        uint256 expectedBalance
+    ) internal {
         wrappedProxy.deposit{value: depositAmount}();
-        uint256 userFinalBalance = wrappedProxy.getBalance(address(this));
-        assertEq(userFinalBalance, userInitialBalance + depositAmount);
-
-        uint256 contractFinalBal = address(wrappedProxy).balance;
-        assertEq(contractFinalBal, depositAmount);
-        assertEq(contractFinalBal, userFinalBalance);
+        uint256 finalBalance = wrappedProxy.getBalance(address(this));
+        assertEq(
+            finalBalance,
+            expectedBalance,
+            "Deposit failed to update balance correctly"
+        );
     }
 
-    function test2UserDepositUpdatesBalance() public {
+    /// @notice Test case to validate that the contract initializes correctly
+    function testInitializationBeforeUpgrade() public {
+        assertEq(wrappedProxy.getVersion(), 1, "Initial version should be 1");
+        assertEq(
+            wrappedProxy.getCompanyAddress(),
+            COMPANY_ADDRESS_V1,
+            "Initial company address mismatch"
+        );
+    }
+
+    /// @notice Test case to validate that a single deposit updates the user balance correctly
+    function testSingleDepositUpdatesBalance() public {
+        performAndValidateDeposit(1 ether, 1 ether);
+    }
+
+    /// @notice Test case to validate that multiple deposits from different users update balances correctly
+    function testUserMultiDepositUpdatesBalance() public {
+        // Simulate deposits from multiple users and validate
+        performAndValidateDeposit(1 ether, 1 ether);
+        performAndValidateDeposit(1 ether, 2 ether);
+        performAndValidateDeposit(1 ether, 3 ether);
+        performAndValidateDeposit(1 ether, 4 ether);
+        performAndValidateDeposit(1 ether, 5 ether);
+    }
+
+    /// @notice Test case to validate that multiple deposits from different users update balances correctly
+    function test2UserDeposit() public {
         // UserA and UserB init
         address userA = makeAddr("A");
-        vm.deal(userA, 1 ether);
         address userB = makeAddr("B");
+        vm.deal(userA, 1 ether);
         vm.deal(userB, 0.5 ether);
-        uint256 userAInitialBalance = wrappedProxy.getBalance(userA);
-        uint256 userBInitialBalance = wrappedProxy.getBalance(userB);
-        assertEq(userAInitialBalance, 0);
-        assertEq(userBInitialBalance, 0);
-        assertEq(address(wrappedProxy).balance, 0);
 
-        // UserA deposits
-        vm.startPrank(userA); // Pretend to be userA
-        wrappedProxy.deposit{value: 1 ether}();
-        uint256 userAFinalBalance = wrappedProxy.getBalance(userA);
-        assertEq(userAFinalBalance, userAInitialBalance + 1 ether);
+        // Perform and validate deposits for UserA and UserB
+        performAndValidateUserDeposit(userA, 1 ether, 1 ether);
+        performAndValidateUserDeposit(userB, 0.5 ether, 0.5 ether);
 
-        // Total contract balance should be the same as userA's balance
+        // Validate total contract balance
         uint256 contractBal = address(wrappedProxy).balance;
-        assertEq(contractBal, 1 ether);
-        assertEq(contractBal, userAFinalBalance);
+        assertEq(contractBal, 1.5 ether, "Total contract balance incorrect");
+    }
 
-        // UserB deposits
-        vm.startPrank(userB); // Pretend to be userB
-        wrappedProxy.deposit{value: 0.5 ether}();
-        uint256 userBFinalBalance = wrappedProxy.getBalance(userB);
-        assertEq(userBFinalBalance, userBInitialBalance + 0.5 ether);
+    /// @notice Test case to validate that deposits update balances correctly for multiple users
+    function test3UserDeposit() public {
+        address userA = makeAddr("A");
+        address userB = makeAddr("B");
+        address userC = makeAddr("C");
+        vm.deal(userA, 1 ether);
+        vm.deal(userB, 0.5 ether);
+        vm.deal(userC, 2 ether);
 
-        // Total contract balance should be the sum of the two deposits
-        contractBal = address(wrappedProxy).balance;
-        assertEq(contractBal, userAFinalBalance + userBFinalBalance);
+        performAndValidateUserDeposit(userA, 1 ether, 1 ether);
+        performAndValidateUserDeposit(userB, 0.5 ether, 0.5 ether);
+        performAndValidateUserDeposit(userC, 1.5 ether, 1.5 ether);
+
+        uint256 contractBal = address(wrappedProxy).balance;
+        assertEq(contractBal, 3 ether, "Total contract balance incorrect");
+    }
+
+    /// @notice Helper function to perform and validate deposits
+    function performAndValidateUserDeposit(
+        address user,
+        uint256 depositAmount,
+        uint256 expectedBalance
+    ) internal {
+        vm.startPrank(user); // Assume the identity of the user
+        wrappedProxy.deposit{value: depositAmount}();
+        uint256 finalBalance = wrappedProxy.getBalance(user);
+        assertEq(
+            finalBalance,
+            expectedBalance,
+            "Deposit didn't update balance correctly"
+        );
+    }
+
+    /// @notice Helper function to perform and validate withdrawals
+    function performAndValidateUserWithdraw(
+        address user,
+        uint256 withdrawAmount,
+        uint256 expectedBalance
+    ) internal {
+        vm.startPrank(user); // Assume the identity of the user
+        wrappedProxy.withdraw(withdrawAmount);
+        uint256 finalBalance = wrappedProxy.getBalance(user);
+        assertEq(
+            finalBalance,
+            expectedBalance,
+            "Withdraw didn't update balance correctly"
+        );
     }
 
     // receive Ether to test withdrawals
     receive() external payable {}
 
-    function testWithdrawUpdatesBalanceAndTransfersETH() public {
-        uint256 depositAmount = 1 ether;
-        uint256 withdrawAmount = 0.5 ether;
-
-        wrappedProxy.deposit{value: depositAmount}();
-
-        // Check initial balances
-        uint256 initialContractBalance = address(wrappedProxy).balance;
-        assertEq(initialContractBalance, depositAmount);
-        uint256 initialUserBalance = wrappedProxy.getBalance(address(this));
-        assertEq(initialUserBalance, initialContractBalance);
-
-        // Withdraw
-        wrappedProxy.withdraw(withdrawAmount);
-
-        // Check final balances
-        uint256 finalContractBalance = address(wrappedProxy).balance;
-        uint256 finalUserBalance = wrappedProxy.getBalance(address(this));
-        assertEq(finalContractBalance, initialContractBalance - withdrawAmount);
-        assertEq(finalUserBalance, initialUserBalance - withdrawAmount);
+    /// @notice Test case to validate that withdrawals update balances correctly
+    function testSingleUserWithdraw() public {
+        performAndValidateUserDeposit(address(this), 1 ether, 1 ether);
+        performAndValidateUserWithdraw(address(this), 0.5 ether, 0.5 ether);
     }
 
-    function testP2PSend() public {
+    /// @notice Test case to validate that withdrawals update balances correctly for multiple users
+    function testMultiUserWithdraw() public {
+        address userA = makeAddr("A");
+        address userB = makeAddr("B");
+        vm.deal(userA, 1 ether);
+        vm.deal(userB, 0.5 ether);
+
+        performAndValidateUserDeposit(userA, 1 ether, 1 ether);
+        performAndValidateUserDeposit(userB, 0.5 ether, 0.5 ether);
+
+        performAndValidateUserWithdraw(userA, 0.5 ether, 0.5 ether);
+        performAndValidateUserWithdraw(userB, 0.25 ether, 0.25 ether);
+
+        uint256 contractBal = address(wrappedProxy).balance;
+        assertEq(
+            contractBal,
+            0.75 ether,
+            "Total contract balance incorrect after withdrawals"
+        );
+    }
+
+    /// @notice Helper function to perform a P2P send and validate balances
+    /// @param initialDeposit The initial amount to deposit into the contract
+    /// @param sendAmount The amount to send in the P2P transaction
+    /// @param feeRate The fee rate in basis points
+    function performAndValidateP2PSend(
+        uint256 initialDeposit,
+        uint256 sendAmount,
+        uint256 feeRate
+    ) internal {
         address recipient = address(0x456);
-        uint256 depositAmount = 1 ether;
-        uint256 sendAmount = 0.5 ether;
+        uint256 expectedFee = (sendAmount * feeRate) / 10000; // fee rate in basis points
 
-        wrappedProxy.deposit{value: depositAmount}();
+        performAndValidateDeposit(initialDeposit, initialDeposit);
 
-        uint256 initialSenderBalance = wrappedProxy.getBalance(address(this));
-        assertEq(initialSenderBalance, depositAmount);
-        uint256 initialRecipientBalance = wrappedProxy.getBalance(recipient);
-        assertEq(initialRecipientBalance, 0);
-        uint256 initialCompanyBalance = wrappedProxy.getBalance(companyAddress);
-        assertEq(initialCompanyBalance, 0);
-
+        // Perform P2P send
         wrappedProxy.send(recipient, sendAmount);
 
-        uint256 fee = (sendAmount * 20) / 10000; // 0.1% fee rate in basis points
+        // Validate final balances
         uint256 finalSenderBalance = wrappedProxy.getBalance(address(this));
-        uint256 finalRecipientBalance = wrappedProxy.getBalance(recipient);
-        uint256 finalCompanyBalance = wrappedProxy.getBalance(companyAddress);
+        assertEq(
+            finalSenderBalance,
+            initialDeposit - sendAmount,
+            "P2P Send didn't update sender balance correctly"
+        );
 
-        assertEq(finalSenderBalance, initialSenderBalance - sendAmount);
+        uint256 finalRecipientBalance = wrappedProxy.getBalance(recipient);
         assertEq(
             finalRecipientBalance,
-            initialRecipientBalance + sendAmount - fee
+            sendAmount - expectedFee,
+            "P2P Send didn't update recipient balance correctly"
         );
-        assertEq(finalCompanyBalance, initialCompanyBalance + fee);
+
+        uint256 finalCompanyBalance = wrappedProxy.getBalance(companyAddress);
+        assertEq(
+            finalCompanyBalance,
+            expectedFee,
+            "P2P Send didn't update company balance correctly"
+        );
+    }
+
+    /// @notice Send exercising a maximum fee
+    function testP2PSendMaxFee() public {
+        performAndValidateP2PSend(
+            1 ether,
+            0.5 ether,
+            wrappedProxy.MAX_FEE_PCNT()
+        );
+    }
+
+    /// @notice Send exercising a mid-range fee
+    function testP2PSendMidFee() public {
+        performAndValidateP2PSend(
+            1 ether,
+            1 ether,
+            wrappedProxy.MID_FEE_PCNT()
+        );
+    }
+
+    /// @notice Send exercising a min-range fee
+    function testP2PSendMinFee() public {
+        performAndValidateP2PSend(
+            6 ether,
+            5.000000000000000001 ether,
+            wrappedProxy.MIN_FEE_PCNT()
+        );
     }
 
     // Function to perform and validate a deposit using v1 implementation

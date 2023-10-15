@@ -28,9 +28,9 @@ contract P2PEthV2 is
     // constants
     uint256 private constant Version = 2;
     uint256 private constant BASIS_POINTS = 10000; // For fee calculations
-    uint256 private constant MAX_FEE_PCNT = 20; // 0.2%
-    uint256 private constant MID_FEE_PCNT = 15; // 0.15%
-    uint256 private constant MIN_FEE_PCNT = 10; // 0.1%
+    uint256 public constant MAX_FEE_PCNT = 20; // 0.2%
+    uint256 public constant MID_FEE_PCNT = 15; // 0.15%
+    uint256 public constant MIN_FEE_PCNT = 10; // 0.1%
 
     // Events
     event Deposited(address indexed user, uint256 amount);
