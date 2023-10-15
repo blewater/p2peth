@@ -110,8 +110,12 @@ contract P2PEth is
 
     // Send function
     function send(address recipient, uint256 amount) external nonReentrant {
-        require(balances[msg.sender] >= amount, "Insufficient balance");
-        require(recipient != address(0), "Invalid recipient address");
+        if (balances[msg.sender] < amount) {
+            revert InsufficientBalance(balances[msg.sender], amount);
+        }
+        if (recipient == address(0)) {
+            revert ZeroAddress(recipient);
+        }
 
         uint256 fee = calculateFee(amount);
 
@@ -163,6 +167,7 @@ contract P2PEth is
             feeRate = MIN_FEE_PCNT; // 0.1%
         }
 
+        // (amount * feeRate) / BASIS_POINTS
         unchecked {
             uint256 amountTimesFeeRate = amount * feeRate;
             if (amountTimesFeeRate < amount) {
