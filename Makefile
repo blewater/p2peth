@@ -42,8 +42,19 @@ balance:
 
 # Deposit amount to account 0's contract to the site
 # e.g., `make deposit amount=1`
+# the site needs to be running
 deposit:
-	@curl -X POST http://localhost:8080/users/deposit/$(amount) -H "Content-Type: application/json" -d '{}'	
+	@curl -X POST http://localhost:8080/users/deposit/$(amount) -H "Content-Type: application/json" -d '{}'
 
-.PHONY: build clean-build test format gas flatten gas-snap anvil balance deposit
+# Get the company address in Anvil
+# Foundry is a dependency
+company-address:
+	@cast call 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 "getCompanyAddress()" --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 --chain 31337 --rpc-url http://127.0.0.1:8545
+
+# Get the contract version in Anvil
+# Foundry is a dependency
+version:
+	@cast call 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 "getVersion()" --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 --chain 31337 --rpc-url http://127.0.0.1:8545
+
+.PHONY: build clean-build test format gas flatten gas-snap anvil balance deposit company-address version
 
