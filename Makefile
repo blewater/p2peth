@@ -45,5 +45,5 @@ balance:
 deposit:
 	@curl -X POST http://localhost:8080/users/deposit/$(amount) -H "Content-Type: application/json" -d '{}'	
 
-.PHONY: build test format gas flatten gas-snap
+.PHONY: build clean-build test format gas flatten gas-snap anvil balance deposit
 
