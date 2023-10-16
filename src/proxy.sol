@@ -11,8 +11,6 @@ import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
  * The proxy contract forwards all function calls to the implementation contract using delegatecall, preserving the context (msg.sender and msg.value) of the original caller.
  * This enables upgrades of the implementation contract without affecting the proxy contract's address, thus ensuring that dependent contracts continue to function as expected.
  */
- contract UUPSProxy is ERC1967Proxy {
-    constructor(address _implementation, bytes memory _data)
-        ERC1967Proxy(_implementation, _data)
-    {}
+contract UUPSProxy is ERC1967Proxy {
+    constructor(address _implementation, bytes memory _data) ERC1967Proxy(_implementation, _data) {}
 }

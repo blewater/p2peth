@@ -27,7 +27,7 @@ contract P2PEth is
 
     /// @dev Mapping to store the Ether balance of each user.
     mapping(address => uint256) private balances;
-    
+
     /// @dev Address where the fees will be sent.
     address private companyAddress;
 
@@ -36,13 +36,13 @@ contract P2PEth is
 
     /// @dev Basis points for fee calculations.
     uint256 private constant BASIS_POINTS = 10000;
-    
+
     /// @dev Maximum fee rate in basis points (0.2%).
     uint256 public constant MAX_FEE_PCNT = 20;
-    
+
     /// @dev Medium fee rate in basis points (0.15%).
     uint256 public constant MID_FEE_PCNT = 15;
-    
+
     /// @dev Minimum fee rate in basis points (0.1%).
     uint256 public constant MIN_FEE_PCNT = 10;
 
@@ -65,7 +65,7 @@ contract P2PEth is
         __ReentrancyGuard_init();
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
-        
+
         if (_companyAddress == address(0)) {
             revert ZeroAddress(_companyAddress);
         }
@@ -81,7 +81,7 @@ contract P2PEth is
     /// @notice Fetches the company address where fees are sent.
     /// @return The company address.
     /// @dev Only the contract owner can call this function.
-    function getCompanyAddress() external view onlyOwner() returns (address) {
+    function getCompanyAddress() external view onlyOwner returns (address) {
         return companyAddress;
     }
 
@@ -123,18 +123,18 @@ contract P2PEth is
             balances[msg.sender] = newBalance;
         }
 
-        /** 
-        * Minimal gas savings in assembly version: max 36661 vs 37069 (Solidity)
-        * Left here only for reference
-        
-        bool success;
-        assembly {
-            let data := mload(0x40)  // Load the free memory pointer
-            mstore(data, 0x0)        // Store a 0 length of the bytes array
-            success := call(gas(), caller(), amount, add(data, 0x20), mload(data), 0, 0)
-        }
-        */
-        (bool success, ) = payable(msg.sender).call{value: amount}("");
+        /**
+         * Minimal gas savings in assembly version: max 36661 vs 37069 (Solidity)
+         * Left here only for reference
+         *
+         *     bool success;
+         *     assembly {
+         *         let data := mload(0x40)  // Load the free memory pointer
+         *         mstore(data, 0x0)        // Store a 0 length of the bytes array
+         *         success := call(gas(), caller(), amount, add(data, 0x20), mload(data), 0, 0)
+         *     }
+         */
+        (bool success,) = payable(msg.sender).call{value: amount}("");
         if (!success) {
             revert TransferFailed(msg.sender, amount);
         }
