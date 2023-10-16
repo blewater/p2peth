@@ -20,15 +20,13 @@ contract P2PEthTest is Test {
     UUPSProxy proxy;
     P2PEth wrappedProxy;
     P2PEthV2 wrappedProxyV2;
-    address companyAddress;
 
     /// @notice Set up the initial state for each test here
     function setUp() public {
-        companyAddress = address(COMPANY_ADDRESS_V1);
         p2pV1 = new P2PEth();
-        proxy = new UUPSProxy(address(p2pV1), "");
+        bytes memory data = abi.encodeWithSignature("initialize(address)", COMPANY_ADDRESS_V1);
+        proxy = new UUPSProxy(address(p2pV1), data);
         wrappedProxy = P2PEth(address(proxy));
-        wrappedProxy.initialize(companyAddress);
     }
 
     /// @notice Internal function to perform and validate a deposit
@@ -157,7 +155,7 @@ contract P2PEthTest is Test {
         uint256 finalRecipientBalance = wrappedProxy.getBalance(recipient);
         assertEq(finalRecipientBalance, sendAmount - expectedFee, "P2P Send didn't update recipient balance correctly");
 
-        uint256 finalCompanyBalance = wrappedProxy.getBalance(companyAddress);
+        uint256 finalCompanyBalance = wrappedProxy.getBalance(COMPANY_ADDRESS_V1);
         assertEq(finalCompanyBalance, expectedFee, "P2P Send didn't update company balance correctly");
     }
 
